@@ -1,0 +1,648 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.ratelimit</groupId>
+    <artifactId>bucket4j-jcache-hazelcast</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>Bucket4j with JCache and Hazelcast</name>
+    <description>Global rate limiting using Bucket4j with JCache and Hazelcast - Java 8 Compatible</description>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.18</version>
+        <relativePath/>
+    </parent>
+
+    <properties>
+        <java.version>1.8</java.version>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        
+        <!-- VERIFIED VERSIONS FOR JAVA 8 -->
+        <bucket4j.version>8.10.1</bucket4j.version>
+        <hazelcast.version>5.3.8</hazelcast.version>
+        <jcache.version>1.1.1</jcache.version>
+    </properties>
+
+    <dependencies>
+        <!-- ============================================== -->
+        <!-- Spring Boot Web Starter                         -->
+        <!-- ============================================== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Logging -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-logging</artifactId>
+        </dependency>
+
+        <!-- ============================================== -->
+        <!-- BUCKET4J - Java 8 Compatible                   -->
+        <!-- ============================================== -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk8-core</artifactId>
+            <version>${bucket4j.version}</version>
+        </dependency>
+
+        <!-- ============================================== -->
+        <!-- HAZELCAST - Java 8 Compatible                  -->
+        <!-- ============================================== -->
+        <dependency>
+            <groupId>com.hazelcast</groupId>
+            <artifactId>hazelcast</artifactId>
+            <version>${hazelcast.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.hazelcast</groupId>
+            <artifactId>hazelcast-spring</artifactId>
+            <version>${hazelcast.version}</version>
+        </dependency>
+
+        <!-- ============================================== -->
+        <!-- JCACHE (JSR-107)                               -->
+        <!-- ============================================== -->
+        <dependency>
+            <groupId>javax.cache</groupId>
+            <artifactId>cache-api</artifactId>
+            <version>${jcache.version}</version>
+        </dependency>
+
+        <!-- ============================================== -->
+        <!-- Jackson for JSON                               -->
+        <!-- ============================================== -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- ============================================== -->
+        <!-- Test Dependencies                              -->
+        <!-- ============================================== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- Maven Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                    <encoding>UTF-8</encoding>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
+
+
+
+//Second
+
+
+spring:
+  application:
+    name: bucket4j-jcache-hazelcast
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+
+logging:
+  level:
+    com.ratelimit: INFO
+    com.hazelcast: WARN
+    org.springframework.web: WARN
+    org.springframework.boot: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/application.log
+    max-size: 100MB
+    max-history: 15
+
+hazelcast:
+  config: classpath:hazelcast.yaml
+
+
+//Third
+
+hazelcast:
+  instance-name: hazelcast-bucket4j
+  
+  network:
+    port:
+      port: 5701
+      auto-increment: true
+    join:
+      multicast:
+        enabled: false
+      tcp-ip:
+        enabled: true
+        member-list:
+          - 127.0.0.1:5701
+          - 127.0.0.1:5702
+          - 127.0.0.1:5703
+  
+  map:
+    rate-limit-buckets:
+      time-to-live-seconds: 3600
+      max-idle-seconds: 300
+      eviction:
+        max-idle-seconds: 300
+      statistics-enabled: true
+  
+  management-center:
+    enabled: false
+
+
+//Fourth
+
+// ============================================================
+// 1. MAIN APPLICATION CLASS
+// File: src/main/java/com/ratelimit/Bucket4jApplication.java
+// ============================================================
+package com.ratelimit;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class Bucket4jApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(Bucket4jApplication.class, args);
+    }
+}
+
+// ============================================================
+// 2. ENDPOINT CONFIGURATION
+// File: src/main/java/com/ratelimit/config/EndpointLimitConfig.java
+// ============================================================
+package com.ratelimit.config;
+
+import java.util.Arrays;
+import java.util.List;
+
+public class EndpointLimitConfig {
+    
+    public static class RateLimitConfig {
+        public String path;
+        public String method;
+        public long capacity;
+        public long refillTokens;
+        public int refillIntervalSeconds;
+        
+        public RateLimitConfig(String path, String method, long capacity, 
+                              long refillTokens, int refillIntervalSeconds) {
+            this.path = path;
+            this.method = method;
+            this.capacity = capacity;
+            this.refillTokens = refillTokens;
+            this.refillIntervalSeconds = refillIntervalSeconds;
+        }
+        
+        public String getKey() {
+            return method + " " + path;
+        }
+    }
+    
+    public static List<RateLimitConfig> getConfigs() {
+        return Arrays.asList(
+            // Payment endpoints
+            new RateLimitConfig("/api/payment", "POST", 6000, 5000, 1),
+            new RateLimitConfig("/api/payment", "GET", 3500, 3000, 1),
+            
+            // User endpoints
+            new RateLimitConfig("/api/user", "GET", 2500, 2000, 1),
+            new RateLimitConfig("/api/user", "POST", 1500, 1000, 1),
+            new RateLimitConfig("/api/user", "PUT", 1500, 1000, 1),
+            new RateLimitConfig("/api/user", "DELETE", 750, 500, 1),
+            
+            // Auth endpoints
+            new RateLimitConfig("/api/auth/login", "POST", 750, 500, 1),
+            new RateLimitConfig("/api/auth/logout", "POST", 750, 500, 1),
+            new RateLimitConfig("/api/auth/refresh", "POST", 1500, 1000, 1),
+            
+            // Order endpoints
+            new RateLimitConfig("/api/order", "POST", 4000, 3000, 1),
+            new RateLimitConfig("/api/order", "GET", 2500, 2000, 1),
+            new RateLimitConfig("/api/order", "PUT", 2000, 1500, 1),
+            
+            // Report endpoints
+            new RateLimitConfig("/api/report", "GET", 1500, 1000, 1),
+            
+            // Health endpoint
+            new RateLimitConfig("/api/health", "GET", 100000, 100000, 1)
+        );
+    }
+}
+
+// ============================================================
+// 3. HAZELCAST CONFIGURATION
+// File: src/main/java/com/ratelimit/config/HazelcastConfig.java
+// ============================================================
+package com.ratelimit.config;
+
+import com.hazelcast.config.Config;
+import com.hazelcast.config.JoinConfig;
+import com.hazelcast.config.MapConfig;
+import com.hazelcast.core.Hazelcast;
+import com.hazelcast.core.HazelcastInstance;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class HazelcastConfig {
+    
+    @Bean
+    public Config hazelcastConfig() {
+        Config config = new Config();
+        config.setInstanceName("hazelcast-bucket4j");
+        
+        JoinConfig joinConfig = config.getNetworkConfig().getJoin();
+        joinConfig.getMulticastConfig().setEnabled(false);
+        joinConfig.getTcpIpConfig()
+            .setEnabled(true)
+            .addMember("127.0.0.1:5701")
+            .addMember("127.0.0.1:5702")
+            .addMember("127.0.0.1:5703");
+        
+        MapConfig mapConfig = new MapConfig()
+            .setName("rate-limit-buckets")
+            .setTimeToLiveSeconds(3600)
+            .setMaxIdleSeconds(300);
+        
+        config.addMapConfig(mapConfig);
+        
+        return config;
+    }
+    
+    @Bean
+    public HazelcastInstance hazelcastInstance(Config config) {
+        return Hazelcast.getOrCreateHazelcastInstance(config);
+    }
+}
+
+// ============================================================
+// 4. BUCKET4J JCACHE SERVICE
+// File: src/main/java/com/ratelimit/service/Bucket4jJCacheService.java
+// ============================================================
+package com.ratelimit.service;
+
+import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.map.IMap;
+import io.github.bucket4j.Bandwidth;
+import io.github.bucket4j.Bucket;
+import io.github.bucket4j.Bucket4j;
+import io.github.bucket4j.Refill;
+import io.github.bucket4j.hazelcast.HazelcastProxyManager;
+import com.ratelimit.config.EndpointLimitConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Service
+public class Bucket4jJCacheService {
+    private static final Logger logger = LoggerFactory.getLogger(Bucket4jJCacheService.class);
+    
+    private final HazelcastProxyManager<String> proxyManager;
+    private final Map<String, EndpointLimitConfig.RateLimitConfig> configs;
+    
+    @Autowired
+    public Bucket4jJCacheService(HazelcastInstance hazelcastInstance) {
+        IMap<String, byte[]> map = hazelcastInstance.getMap("rate-limit-buckets");
+        this.proxyManager = new HazelcastProxyManager<String>(map);
+        this.configs = new ConcurrentHashMap<String, EndpointLimitConfig.RateLimitConfig>();
+        
+        initializeConfigs();
+        logger.info("Bucket4j JCache Service initialized with {} endpoints", 
+            EndpointLimitConfig.getConfigs().size());
+    }
+    
+    private void initializeConfigs() {
+        for (EndpointLimitConfig.RateLimitConfig config : EndpointLimitConfig.getConfigs()) {
+            configs.put(config.getKey(), config);
+            logger.info("Registered: {} - Capacity: {}, Refill: {} tokens/{}s", 
+                config.getKey(), config.capacity, config.refillTokens, config.refillIntervalSeconds);
+        }
+    }
+    
+    public boolean allowRequest(String method, String path) {
+        String key = method + " " + path;
+        EndpointLimitConfig.RateLimitConfig config = configs.get(key);
+        
+        if (config == null) {
+            return true;
+        }
+        
+        try {
+            io.github.bucket4j.BucketConfiguration bucketConfig = 
+                io.github.bucket4j.BucketConfiguration.builder()
+                    .addLimit(Bandwidth.classic(config.capacity, 
+                        Refill.intervally(config.refillTokens, 
+                            Duration.ofSeconds(config.refillIntervalSeconds))))
+                    .build();
+            
+            Bucket bucket = proxyManager.builder().build(key, bucketConfig);
+            return bucket.tryConsume(1);
+            
+        } catch (Exception e) {
+            logger.error("Error checking rate limit for: {}", key, e);
+            return true;
+        }
+    }
+    
+    public BucketStatus getStatus(String method, String path) {
+        String key = method + " " + path;
+        EndpointLimitConfig.RateLimitConfig config = configs.get(key);
+        
+        if (config == null) {
+            return null;
+        }
+        
+        try {
+            io.github.bucket4j.BucketConfiguration bucketConfig = 
+                io.github.bucket4j.BucketConfiguration.builder()
+                    .addLimit(Bandwidth.classic(config.capacity, 
+                        Refill.intervally(config.refillTokens, 
+                            Duration.ofSeconds(config.refillIntervalSeconds))))
+                    .build();
+            
+            Bucket bucket = proxyManager.builder().build(key, bucketConfig);
+            io.github.bucket4j.ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(0);
+            long availableTokens = probe.getRemainingTokens();
+            
+            return new BucketStatus(
+                config.capacity,
+                config.refillTokens,
+                config.refillIntervalSeconds,
+                availableTokens,
+                config.capacity - availableTokens
+            );
+            
+        } catch (Exception e) {
+            logger.error("Error getting status for: {}", key, e);
+            return null;
+        }
+    }
+    
+    public static class BucketStatus {
+        public long capacity;
+        public long refillTokens;
+        public int refillIntervalSeconds;
+        public long availableTokens;
+        public long consumedTokens;
+        
+        public BucketStatus(long capacity, long refillTokens, int refillIntervalSeconds,
+                          long availableTokens, long consumedTokens) {
+            this.capacity = capacity;
+            this.refillTokens = refillTokens;
+            this.refillIntervalSeconds = refillIntervalSeconds;
+            this.availableTokens = availableTokens;
+            this.consumedTokens = consumedTokens;
+        }
+    }
+}
+
+// ============================================================
+// 5. RATE LIMITING INTERCEPTOR
+// File: src/main/java/com/ratelimit/interceptor/Bucket4jJCacheInterceptor.java
+// ============================================================
+package com.ratelimit.interceptor;
+
+import com.ratelimit.service.Bucket4jJCacheService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+@Component
+public class Bucket4jJCacheInterceptor implements HandlerInterceptor {
+    private static final Logger logger = LoggerFactory.getLogger(Bucket4jJCacheInterceptor.class);
+    
+    @Autowired
+    private Bucket4jJCacheService rateLimitService;
+    
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, 
+                            Object handler) throws Exception {
+        String method = request.getMethod();
+        String path = request.getRequestURI();
+        
+        if (!rateLimitService.allowRequest(method, path)) {
+            Bucket4jJCacheService.BucketStatus status = rateLimitService.getStatus(method, path);
+            
+            response.setStatus(HttpServletResponse.SC_TOO_MANY_REQUESTS);
+            response.setContentType("application/json");
+            
+            if (status != null) {
+                response.setHeader("X-RateLimit-Capacity", String.valueOf(status.capacity));
+                response.setHeader("X-RateLimit-Available-Tokens", String.valueOf(status.availableTokens));
+                response.setHeader("X-RateLimit-Consumed-Tokens", String.valueOf(status.consumedTokens));
+                response.setHeader("Retry-After", String.valueOf(status.refillIntervalSeconds));
+                response.setHeader("X-RateLimit-Global", "true");
+            }
+            
+            String jsonResponse = "{\"error\": \"Rate limit exceeded\", " +
+                "\"message\": \"Too many requests. Please try again later.\"}";
+            response.getWriter().write(jsonResponse);
+            
+            logger.warn("Global rate limit exceeded: {} {}", method, path);
+            return false;
+        }
+        
+        return true;
+    }
+}
+
+// ============================================================
+// 6. SPRING WEB MVC CONFIGURATION
+// File: src/main/java/com/ratelimit/config/WebMvcConfig.java
+// ============================================================
+package com.ratelimit.config;
+
+import com.ratelimit.interceptor.Bucket4jJCacheInterceptor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class WebMvcConfig implements WebMvcConfigurer {
+    
+    @Autowired
+    private Bucket4jJCacheInterceptor rateLimitInterceptor;
+    
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(rateLimitInterceptor)
+            .addPathPatterns("/api/**")
+            .excludePathPatterns("/api/health", "/api/bucket/status", "/api/bucket/all-configs");
+    }
+}
+
+// ============================================================
+// 7. HEALTH CONTROLLER
+// File: src/main/java/com/ratelimit/controller/HealthController.java
+// ============================================================
+package com.ratelimit.controller;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api")
+public class HealthController {
+    
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> health() {
+        Map<String, String> response = new HashMap<String, String>();
+        response.put("status", "UP");
+        response.put("service", "Bucket4j JCache Hazelcast");
+        response.put("type", "DISTRIBUTED");
+        response.put("timestamp", String.valueOf(System.currentTimeMillis()));
+        return ResponseEntity.ok(response);
+    }
+}
+
+// ============================================================
+// 8. BUCKET STATUS CONTROLLER
+// File: src/main/java/com/ratelimit/controller/BucketStatusController.java
+// ============================================================
+package com.ratelimit.controller;
+
+import com.ratelimit.config.EndpointLimitConfig;
+import com.ratelimit.service.Bucket4jJCacheService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/bucket")
+public class BucketStatusController {
+    
+    @Autowired
+    private Bucket4jJCacheService rateLimitService;
+    
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> getBucketStatus(
+            @RequestParam String method, 
+            @RequestParam String path) {
+        
+        Bucket4jJCacheService.BucketStatus status = rateLimitService.getStatus(method, path);
+        
+        Map<String, Object> response = new HashMap<String, Object>();
+        response.put("method", method);
+        response.put("path", path);
+        response.put("type", "DISTRIBUTED");
+        response.put("backend", "Hazelcast");
+        response.put("timestamp", System.currentTimeMillis());
+        
+        if (status != null) {
+            response.put("capacity", status.capacity);
+            response.put("refillTokens", status.refillTokens);
+            response.put("refillIntervalSeconds", status.refillIntervalSeconds);
+            response.put("availableTokens", status.availableTokens);
+            response.put("consumedTokens", status.consumedTokens);
+            response.put("utilizationPercent", 
+                (int) ((status.consumedTokens * 100) / status.capacity));
+        } else {
+            response.put("error", "No configuration found for this endpoint");
+        }
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    @GetMapping("/all-configs")
+    public ResponseEntity<Map<String, Object>> getAllConfigs() {
+        Map<String, Object> response = new HashMap<String, Object>();
+        Map<String, Object> endpoints = new HashMap<String, Object>();
+        
+        for (EndpointLimitConfig.RateLimitConfig config : EndpointLimitConfig.getConfigs()) {
+            Bucket4jJCacheService.BucketStatus status = 
+                rateLimitService.getStatus(config.method, config.path);
+            
+            Map<String, Object> endpointInfo = new HashMap<String, Object>();
+            endpointInfo.put("capacity", config.capacity);
+            endpointInfo.put("refillTokens", config.refillTokens);
+            endpointInfo.put("refillIntervalSeconds", config.refillIntervalSeconds);
+            
+            if (status != null) {
+                endpointInfo.put("availableTokens", status.availableTokens);
+                endpointInfo.put("consumedTokens", status.consumedTokens);
+                endpointInfo.put("utilizationPercent", 
+                    (int) ((status.consumedTokens * 100) / config.capacity));
+            }
+            
+            endpoints.put(config.getKey(), endpointInfo);
+        }
+        
+        response.put("timestamp", System.currentTimeMillis());
+        response.put("totalEndpoints", EndpointLimitConfig.getConfigs().size());
+        response.put("type", "DISTRIBUTED");
+        response.put("backend", "Hazelcast");
+        response.put("endpoints", endpoints);
+        
+        return ResponseEntity.ok(response);
+    }
+}
+
